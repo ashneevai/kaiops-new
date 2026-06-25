@@ -4,7 +4,9 @@ export default function InvestigationPage() {
       <h2 className="text-2xl font-bold">AI Investigation View</h2>
       <div className="k-card">
         <h3 className="font-semibold">Agent Execution Graph</h3>
-        <pre className="mt-2 rounded bg-black/5 p-3 text-xs dark:bg-white/10">Alert -> Context -> RCA -> Impact -> Resolution -> Validation -> Approval</pre>
+        <pre className="mt-2 rounded bg-black/5 p-3 text-xs dark:bg-white/10">
+          {"Alert -> Context -> RCA -> Impact -> Resolution -> Validation -> Approval"}
+        </pre>
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <article className="k-card">

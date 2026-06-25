@@ -10,7 +10,7 @@ export default function RCAPage() {
         <h3 className="font-semibold">Contributing Factors</h3>
         <ul className="mt-2 space-y-2 text-sm">
           <li>Misconfigured autoscaling floor</li>
-          <li>Replica lag > 2.5s</li>
+          <li>{"Replica lag > 2.5s"}</li>
           <li>Long running migration lock contention</li>
         </ul>
       </article>
