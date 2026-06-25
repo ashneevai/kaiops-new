@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kaiops-api
+  namespace: kaiops
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: kaiops-api
+  template:
+    metadata:
+      labels:
+        app: kaiops-api
+    spec:
+      containers:
+        - name: api
+          image: kaiops/api:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: kaiops-secrets
+                  key: database-url
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: kaiops-secrets
+                  key: redis-url
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: kafka:9092
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kaiops-api
+  namespace: kaiops
+spec:
+  selector:
+    app: kaiops-api
+  ports:
+    - port: 80
+      targetPort: 8000

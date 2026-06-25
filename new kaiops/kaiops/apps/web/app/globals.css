@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #f2f8f6;
+  --surface: #ffffff;
+  --ink: #0a1a1f;
+  --muted: #547078;
+  --accent: #d34e24;
+}
+
+.dark {
+  --bg: #081217;
+  --surface: #10242c;
+  --ink: #e6f2ef;
+  --muted: #9fb8bf;
+  --accent: #ff8d52;
+}
+
+body {
+  background: radial-gradient(circle at 15% 20%, #d9ece8 0%, var(--bg) 52%), var(--bg);
+  color: var(--ink);
+}
+
+.k-card {
+  @apply rounded-xl border border-black/10 bg-white/85 p-4 shadow-sm dark:bg-storm/70 dark:border-white/10;
+}
