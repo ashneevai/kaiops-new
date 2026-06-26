@@ -1,5 +1,5 @@
 import { KPIGrid, ServiceImpactChart, type KPIItem } from "@/components/dashboard-widgets";
-import { getMonitoringOverview } from "@/lib/monitoring";
+import { buildAlertId, getMonitoringOverview, getPrometheusAlerts } from "@/lib/monitoring";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +32,8 @@ function statusClass(health: string) {
 
 export default async function DashboardPage() {
   const monitoring = await getMonitoringOverview();
+  const liveAlerts = await getPrometheusAlerts();
+  const recentLiveAlerts = liveAlerts.alerts.slice(0, 5);
   const monitoringKpis: KPIItem[] = [
     { label: "Open Incidents", value: "42" },
     { label: "Critical Incidents", value: "7" },
@@ -56,11 +58,19 @@ export default async function DashboardPage() {
         <ServiceImpactChart />
         <article className="k-card">
           <h3 className="text-sm font-semibold">Recent Alerts</h3>
-          <ul className="mt-3 space-y-2 text-sm">
-            <li>Datadog: checkout latency above SLO</li>
-            <li>Prometheus: db CPU saturation</li>
-            <li>CloudWatch: lambda error rate spike</li>
-          </ul>
+          {recentLiveAlerts.length > 0 ? (
+            <ul className="mt-3 space-y-2 text-sm">
+              {recentLiveAlerts.map((alert) => (
+                <li key={buildAlertId(alert)}>
+                  Prometheus: {alert.service} - {alert.summary}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
+              No active Prometheus alerts right now.
+            </p>
+          )}
         </article>
       </div>
       <article className="k-card">
