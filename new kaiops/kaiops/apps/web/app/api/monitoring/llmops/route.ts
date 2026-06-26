@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const apiBaseUrl = process.env.KAIOPS_API_BASE_URL ?? process.env.NEXT_PUBLIC_KAIOPS_API_BASE_URL ?? "http://localhost:8001";
+const apiBaseUrl = process.env.KAIOPS_API_BASE_URL ?? process.env.NEXT_PUBLIC_KAIOPS_API_BASE_URL ?? "http://localhost:8000";
 
 export const dynamic = "force-dynamic";
 

@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(
   request: NextRequest,
-  context: { params: Promise<{ flowId: string }> }
+  context: { params: Promise<{ flowId: string }> },
 ) {
   const { flowId } = await context.params;
 
@@ -36,7 +36,7 @@ export async function POST(
             ? error.message
             : "Failed to run selected sample workflow",
       },
-      { status: 502 }
+      { status: 502 },
     );
   }
 }

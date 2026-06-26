@@ -128,14 +128,18 @@ export type WorkflowResponse = {
   generated_at: string;
 };
 
-const apiBaseUrl = process.env.KAIOPS_API_BASE_URL ?? "http://localhost:8000";
+const apiBaseUrl =
+  process.env.KAIOPS_API_BASE_URL ??
+  process.env.NEXT_PUBLIC_KAIOPS_API_BASE_URL ??
+  "http://localhost:8000";
 
 export const NEXT_PUBLIC_API_BASE_URL =
   process.env.NEXT_PUBLIC_KAIOPS_API_BASE_URL ?? "http://localhost:8000";
 
 export async function getFlowCatalog(): Promise<FlowSummary[]> {
+  const endpoint = typeof window === "undefined" ? `${apiBaseUrl}/api/v1/sample/flows` : "/api/sample/flows";
   try {
-    const response = await fetch(`${apiBaseUrl}/api/v1/sample/flows`, { cache: "no-store" });
+    const response = await fetch(endpoint, { cache: "no-store" });
     if (!response.ok) {
       return [];
     }
@@ -144,4 +148,58 @@ export async function getFlowCatalog(): Promise<FlowSummary[]> {
   } catch {
     return [];
   }
+}
+
+export async function runFlowWorkflow(flowId: string): Promise<WorkflowResponse> {
+  const endpoint =
+    typeof window === "undefined"
+      ? `${apiBaseUrl}/api/v1/sample/${encodeURIComponent(flowId)}/workflow`
+      : `/api/sample/${encodeURIComponent(flowId)}/workflow`;
+
+  const response = await fetch(endpoint, { method: "POST", cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`Workflow request failed with status ${response.status}`);
+  }
+  return (await response.json()) as WorkflowResponse;
+}
+
+const SERVICE_TO_FLOW: Record<string, string> = {
+  payments: "payment-latency",
+  "payments-api": "payment-latency",
+  checkout: "checkout-pod-crash",
+  "checkout-api": "checkout-pod-crash",
+  inventory: "inventory-cpu",
+  "inventory-api": "inventory-cpu",
+  cache: "redis-cache",
+  redis: "redis-cache",
+  "redis-cache": "redis-cache",
+  "orders-db": "database-replica-lag",
+  orders: "database-replica-lag",
+  "orders-postgres": "database-replica-lag",
+  auth: "auth-errors",
+  "auth-api": "auth-errors",
+  search: "search-memory",
+  "search-api": "search-memory",
+  billing: "billing-terraform",
+  "billing-network": "billing-terraform",
+  fraud: "fraud-api",
+  "fraud-api": "fraud-api",
+  cdn: "cdn-errors",
+  "cdn-rules": "cdn-errors",
+};
+
+export function mapServiceToFlowId(service: string | undefined | null): string {
+  if (!service) {
+    return "payment-latency";
+  }
+  const normalized = service.toLowerCase();
+  if (SERVICE_TO_FLOW[normalized]) {
+    return SERVICE_TO_FLOW[normalized];
+  }
+  for (const [key, flowId] of Object.entries(SERVICE_TO_FLOW)) {
+    if (normalized.includes(key) || key.includes(normalized)) {
+      return flowId;
+    }
+  }
+  return "payment-latency";
 }

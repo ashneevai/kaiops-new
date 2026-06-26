@@ -86,7 +86,8 @@ export type PersistedLLMOpsTelemetry = {
   note: string | null;
 };
 
-const apiBaseUrl = process.env.KAIOPS_API_BASE_URL ?? process.env.NEXT_PUBLIC_KAIOPS_API_BASE_URL ?? "http://localhost:8001";
+const apiBaseUrl =
+  process.env.KAIOPS_API_BASE_URL ?? process.env.NEXT_PUBLIC_KAIOPS_API_BASE_URL ?? "http://localhost:8000";
 const fallbackPrometheusUrl = process.env.KAIOPS_PROMETHEUS_URL ?? "http://localhost:9090";
 
 export async function getMonitoringOverview(): Promise<MonitoringOverview> {

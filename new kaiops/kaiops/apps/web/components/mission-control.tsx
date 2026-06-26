@@ -1,14 +1,31 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 
 import {
+  buildAlertId,
+  getPrometheusAlerts,
+  type MonitoringAlert,
+  type MonitoringAlerts,
+} from "@/lib/monitoring";
+import {
+  mapServiceToFlowId,
+  runFlowWorkflow,
   type FlowSummary,
   type WorkflowEvent,
   type WorkflowResponse,
 } from "@/lib/sample-flows";
+import { useWorkflowStore } from "@/lib/store/workflow-store";
 
-const TABS = [
+const SOURCE_TABS = [
+  { id: "alerts", label: "Live Prometheus Alerts" },
+  { id: "flows", label: "Demo Flow Catalog" },
+] as const;
+
+type SourceTabId = (typeof SOURCE_TABS)[number]["id"];
+
+const RESULT_TABS = [
   { id: "summary", label: "Incident Summary" },
   { id: "approval", label: "Approval" },
   { id: "trace", label: "Agent Trace" },
@@ -16,18 +33,24 @@ const TABS = [
   { id: "closure", label: "Closed Incidents" },
 ] as const;
 
-type TabId = (typeof TABS)[number]["id"];
+type ResultTabId = (typeof RESULT_TABS)[number]["id"];
+
+const ALERT_REFRESH_MS = 5000;
 
 function severityClass(severity: string): string {
-  switch (severity.toUpperCase()) {
-    case "CRITICAL":
+  switch (severity.toLowerCase()) {
+    case "critical":
+    case "firing":
       return "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300";
-    case "HIGH":
+    case "high":
       return "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300";
-    case "WARNING":
+    case "warning":
+    case "pending":
       return "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300";
+    case "inactive":
+      return "bg-slate-100 text-slate-700 dark:bg-slate-600/30 dark:text-slate-200";
     default:
-      return "bg-slate-100 text-slate-700 dark:bg-slate-500/20 dark:text-slate-300";
+      return "bg-slate-100 text-slate-700 dark:bg-slate-600/30 dark:text-slate-200";
   }
 }
 
@@ -38,7 +61,7 @@ function formatPercentage(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
 
-function formatTimestamp(value: string | undefined | null): string {
+function formatTimestamp(value: string | null | undefined): string {
   if (!value) {
     return "—";
   }
@@ -317,45 +340,94 @@ function ClosureTab({ workflow }: { workflow: WorkflowResponse }) {
   );
 }
 
+type RunTarget =
+  | { kind: "flow"; flowId: string; label: string }
+  | { kind: "alert"; alert: MonitoringAlert };
+
 export function MissionControl({ flows }: { flows: FlowSummary[] }) {
-  const [selectedFlowId, setSelectedFlowId] = useState<string>(flows[0]?.id ?? "");
+  const [sourceTab, setSourceTab] = useState<SourceTabId>("alerts");
   const [severityFilter, setSeverityFilter] = useState<string>("ALL");
-  const [workflow, setWorkflow] = useState<WorkflowResponse | null>(null);
-  const [activeTab, setActiveTab] = useState<TabId>("summary");
+  const [search, setSearch] = useState<string>("");
+  const [activeTab, setActiveTab] = useState<ResultTabId>("summary");
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [running, setRunning] = useState<RunTarget | null>(null);
+
+  const [alerts, setAlerts] = useState<MonitoringAlerts | null>(null);
+  const [alertsLoading, setAlertsLoading] = useState<boolean>(true);
+
+  const setWorkflow = useWorkflowStore((state) => state.setWorkflow);
+  const workflow = useWorkflowStore((state) => state.workflow);
+
+  useEffect(() => {
+    let mounted = true;
+    let inFlight = false;
+
+    const refresh = async () => {
+      if (inFlight || (typeof document !== "undefined" && document.hidden)) {
+        return;
+      }
+      inFlight = true;
+      const next = await getPrometheusAlerts();
+      inFlight = false;
+      if (!mounted) {
+        return;
+      }
+      setAlerts(next);
+      setAlertsLoading(false);
+    };
+
+    void refresh();
+    const timer = setInterval(() => {
+      void refresh();
+    }, ALERT_REFRESH_MS);
+
+    return () => {
+      mounted = false;
+      clearInterval(timer);
+    };
+  }, []);
 
   const filteredFlows = useMemo(() => {
-    if (severityFilter === "ALL") {
-      return flows;
-    }
-    return flows.filter((flow) => flow.severity === severityFilter);
-  }, [flows, severityFilter]);
+    const term = search.trim().toLowerCase();
+    return flows.filter((flow) => {
+      const matchesSeverity = severityFilter === "ALL" || flow.severity === severityFilter;
+      if (!matchesSeverity) {
+        return false;
+      }
+      if (!term) {
+        return true;
+      }
+      return [flow.alert_id, flow.alert_name, flow.title, flow.service, flow.description]
+        .map((value) => String(value ?? "").toLowerCase())
+        .some((value) => value.includes(term));
+    });
+  }, [flows, severityFilter, search]);
 
-  const selectedFlow = useMemo(
-    () => flows.find((flow) => flow.id === selectedFlowId) ?? null,
-    [flows, selectedFlowId],
-  );
+  const filteredAlerts = useMemo(() => {
+    const list = alerts?.alerts ?? [];
+    const term = search.trim().toLowerCase();
+    return list.filter((alert) => {
+      const severity = alert.severity.toUpperCase();
+      const matchesSeverity = severityFilter === "ALL" || severity === severityFilter;
+      if (!matchesSeverity) {
+        return false;
+      }
+      if (!term) {
+        return true;
+      }
+      return [alert.name, alert.service, alert.summary, alert.state]
+        .map((value) => String(value ?? "").toLowerCase())
+        .some((value) => value.includes(term));
+    });
+  }, [alerts?.alerts, severityFilter, search]);
 
-  async function runWorkflow() {
-    if (!selectedFlowId) {
-      return;
-    }
-
+  async function runForFlow(flowId: string, label: string) {
+    setRunning({ kind: "flow", flowId, label });
     setIsRunning(true);
     setError(null);
-
     try {
-      const response = await fetch(`/api/sample/${selectedFlowId}/workflow`, {
-        method: "POST",
-        cache: "no-store",
-      });
-
-      if (!response.ok) {
-        throw new Error(`Workflow request failed with status ${response.status}`);
-      }
-
-      const data = (await response.json()) as WorkflowResponse;
+      const data = await runFlowWorkflow(flowId);
       setWorkflow(data);
       setActiveTab("summary");
     } catch (caughtError) {
@@ -363,6 +435,25 @@ export function MissionControl({ flows }: { flows: FlowSummary[] }) {
       setError(message);
     } finally {
       setIsRunning(false);
+      setRunning(null);
+    }
+  }
+
+  async function runForAlert(alert: MonitoringAlert) {
+    const flowId = mapServiceToFlowId(alert.service);
+    setRunning({ kind: "alert", alert });
+    setIsRunning(true);
+    setError(null);
+    try {
+      const data = await runFlowWorkflow(flowId);
+      setWorkflow(data);
+      setActiveTab("summary");
+    } catch (caughtError) {
+      const message = caughtError instanceof Error ? caughtError.message : "Unknown workflow error";
+      setError(message);
+    } finally {
+      setIsRunning(false);
+      setRunning(null);
     }
   }
 
@@ -382,14 +473,18 @@ export function MissionControl({ flows }: { flows: FlowSummary[] }) {
       <header className="space-y-1">
         <h2 className="text-2xl font-bold">Mission Control</h2>
         <p className="text-sm text-slate-600 dark:text-slate-300">
-          Trigger an end-to-end agent workflow and explore the recommended remediation, approval, agent trace, FinOps, and closure
-          report.
+          Pick a live alert or a demo scenario, run an end-to-end agent workflow, and review the result across the linked pages.
         </p>
       </header>
 
       <article className="k-card space-y-3">
-        <h3 className="text-sm font-semibold">Flow Control</h3>
-        <div className="grid gap-3 md:grid-cols-[180px_1fr_auto]">
+        <header className="flex flex-wrap items-end gap-3">
+          <div className="flex-1 space-y-1">
+            <h3 className="text-sm font-semibold">Flow Control</h3>
+            <p className="text-xs text-slate-600 dark:text-slate-300">
+              Live alert table refreshes every {ALERT_REFRESH_MS / 1000}s. Demo flows are deterministic and safe to re-run.
+            </p>
+          </div>
           <label className="block text-sm">
             <span className="text-xs uppercase tracking-wide text-slate-500">Severity</span>
             <select
@@ -404,34 +499,178 @@ export function MissionControl({ flows }: { flows: FlowSummary[] }) {
             </select>
           </label>
           <label className="block text-sm">
-            <span className="text-xs uppercase tracking-wide text-slate-500">Flow</span>
-            <select
-              className="mt-1 w-full rounded-md border border-black/10 bg-white px-2 py-1 text-sm dark:border-white/10 dark:bg-ink/40"
-              value={selectedFlowId}
-              onChange={(event) => setSelectedFlowId(event.target.value)}
-            >
-              {filteredFlows.map((flow) => (
-                <option key={flow.id} value={flow.id}>
-                  {flow.alert_id} · {flow.title} · {flow.service} · {flow.severity}
-                </option>
-              ))}
-            </select>
+            <span className="text-xs uppercase tracking-wide text-slate-500">Search</span>
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="service, alert, scenario…"
+              className="mt-1 w-64 rounded-md border border-black/10 bg-white px-2 py-1 text-sm dark:border-white/10 dark:bg-ink/40"
+            />
           </label>
-          <button
-            type="button"
-            onClick={runWorkflow}
-            disabled={isRunning || !selectedFlowId}
-            className="self-end rounded-md bg-orange-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isRunning ? "Running…" : "Run Selected Flow"}
-          </button>
-        </div>
-        {selectedFlow ? (
-          <p className="text-xs text-slate-600 dark:text-slate-300">
-            <span className="font-medium uppercase">{selectedFlow.severity}</span> · {selectedFlow.alert_name} ·{" "}
-            {selectedFlow.description}
-          </p>
-        ) : null}
+        </header>
+
+        <nav className="flex flex-wrap gap-2 border-b border-black/10 pb-1 dark:border-white/10">
+          {SOURCE_TABS.map((tab) => {
+            const isActive = tab.id === sourceTab;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setSourceTab(tab.id)}
+                className={`rounded-t-md px-3 py-1 text-sm font-medium transition ${
+                  isActive
+                    ? "bg-black/5 text-slate-900 dark:bg-white/10 dark:text-white"
+                    : "text-slate-600 hover:bg-black/5 dark:text-slate-300 dark:hover:bg-white/10"
+                }`}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </nav>
+
+        {sourceTab === "alerts" ? (
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wide">
+              <span className="rounded-full bg-rose-100 px-3 py-1 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300">
+                Firing {alerts?.firing_alerts ?? 0}
+              </span>
+              <span className="rounded-full bg-amber-100 px-3 py-1 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
+                Pending {alerts?.pending_alerts ?? 0}
+              </span>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700 dark:bg-slate-600/30 dark:text-slate-200">
+                Total {alerts?.total_alerts ?? 0}
+              </span>
+              {alerts?.connected === false ? (
+                <span className="rounded-full bg-rose-100 px-3 py-1 text-rose-700 dark:bg-rose-500/20 dark:text-rose-300">
+                  Prometheus unreachable
+                </span>
+              ) : null}
+              <span className="ml-auto text-[10px] text-slate-500">
+                Last refresh: {formatTimestamp(alerts?.generated_at ?? null)}
+              </span>
+            </div>
+
+            {alertsLoading ? (
+              <p className="text-sm text-slate-600 dark:text-slate-300">Loading live alerts…</p>
+            ) : filteredAlerts.length === 0 ? (
+              <p className="text-sm text-slate-600 dark:text-slate-300">
+                No Prometheus alerts match the current filter. Trigger an alert in Prometheus or switch to the Demo Flow Catalog.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-black/10 text-slate-600 dark:border-white/10 dark:text-slate-300">
+                      <th className="px-3 py-2 font-medium">Alert</th>
+                      <th className="px-3 py-2 font-medium">Service</th>
+                      <th className="px-3 py-2 font-medium">Severity</th>
+                      <th className="px-3 py-2 font-medium">State</th>
+                      <th className="px-3 py-2 font-medium">Active Since</th>
+                      <th className="px-3 py-2 font-medium">Summary</th>
+                      <th className="px-3 py-2 font-medium">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredAlerts.map((alert) => {
+                      const isRunningRow =
+                        isRunning && running?.kind === "alert" && buildAlertId(running.alert) === buildAlertId(alert);
+                      return (
+                        <tr key={buildAlertId(alert)} className="border-b border-black/5 dark:border-white/5">
+                          <td className="px-3 py-2 font-medium">{alert.name}</td>
+                          <td className="px-3 py-2">{alert.service}</td>
+                          <td className="px-3 py-2">
+                            <span className={`rounded-full px-2 py-1 text-xs font-semibold uppercase ${severityClass(alert.severity)}`}>
+                              {alert.severity}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2">
+                            <span className={`rounded-full px-2 py-1 text-xs font-semibold uppercase ${severityClass(alert.state)}`}>
+                              {alert.state}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2">{formatTimestamp(alert.active_at)}</td>
+                          <td className="px-3 py-2">{alert.summary}</td>
+                          <td className="px-3 py-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => runForAlert(alert)}
+                                disabled={isRunning}
+                                className="rounded-md bg-orange-600 px-2 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {isRunningRow ? "Running…" : "Run Workflow"}
+                              </button>
+                              <Link
+                                href={`/alerts/${buildAlertId(alert)}`}
+                                className="rounded-md border border-black/10 px-2 py-1 text-xs font-semibold uppercase tracking-wide hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+                              >
+                                Drill Down
+                              </Link>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-black/10 text-slate-600 dark:border-white/10 dark:text-slate-300">
+                  <th className="px-3 py-2 font-medium">Alert ID</th>
+                  <th className="px-3 py-2 font-medium">Title</th>
+                  <th className="px-3 py-2 font-medium">Service</th>
+                  <th className="px-3 py-2 font-medium">Severity</th>
+                  <th className="px-3 py-2 font-medium">Recommended Action</th>
+                  <th className="px-3 py-2 font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredFlows.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-3 py-4 text-center text-sm text-slate-600 dark:text-slate-300">
+                      No demo flows match your filter.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredFlows.map((flow) => {
+                    const isRunningRow = isRunning && running?.kind === "flow" && running.flowId === flow.id;
+                    return (
+                      <tr key={flow.id} className="border-b border-black/5 dark:border-white/5">
+                        <td className="px-3 py-2 font-mono text-xs">{flow.alert_id}</td>
+                        <td className="px-3 py-2 font-medium">{flow.title}</td>
+                        <td className="px-3 py-2">{flow.service}</td>
+                        <td className="px-3 py-2">
+                          <span className={`rounded-full px-2 py-1 text-xs font-semibold uppercase ${severityClass(flow.severity)}`}>
+                            {flow.severity}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">{flow.recommended_action}</td>
+                        <td className="px-3 py-2">
+                          <button
+                            type="button"
+                            onClick={() => runForFlow(flow.id, flow.title)}
+                            disabled={isRunning}
+                            className="rounded-md bg-orange-600 px-2 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {isRunningRow ? "Running…" : "Run Workflow"}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
         {error ? (
           <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200">
             {error}
@@ -443,19 +682,13 @@ export function MissionControl({ flows }: { flows: FlowSummary[] }) {
         <>
           <div className="grid gap-3 md:grid-cols-4">
             <MetricCard label="Severity" value={workflow.scenario.severity} />
-            <MetricCard
-              label="Confidence"
-              value={formatPercentage(workflow.recommendation.confidence)}
-            />
-            <MetricCard
-              label="Health Restored"
-              value={workflow.closure_report.health_restored ? "Yes" : "No"}
-            />
+            <MetricCard label="Confidence" value={formatPercentage(workflow.recommendation.confidence)} />
+            <MetricCard label="Health Restored" value={workflow.closure_report.health_restored ? "Yes" : "No"} />
             <MetricCard label="Agent Handoffs" value={String(workflow.metrics.agent_handoffs)} />
           </div>
 
-          <nav className="flex flex-wrap gap-2 border-b border-black/10 pb-1 dark:border-white/10">
-            {TABS.map((tab) => {
+          <nav className="flex flex-wrap items-center gap-2 border-b border-black/10 pb-1 dark:border-white/10">
+            {RESULT_TABS.map((tab) => {
               const isActive = tab.id === activeTab;
               return (
                 <button
@@ -472,6 +705,44 @@ export function MissionControl({ flows }: { flows: FlowSummary[] }) {
                 </button>
               );
             })}
+            <div className="ml-auto flex flex-wrap items-center gap-2 text-xs">
+              <Link
+                href="/incidents"
+                className="rounded-md border border-black/10 px-2 py-1 font-semibold uppercase tracking-wide hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+              >
+                Command Center
+              </Link>
+              <Link
+                href="/investigation"
+                className="rounded-md border border-black/10 px-2 py-1 font-semibold uppercase tracking-wide hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+              >
+                Investigation
+              </Link>
+              <Link
+                href="/rca"
+                className="rounded-md border border-black/10 px-2 py-1 font-semibold uppercase tracking-wide hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+              >
+                RCA
+              </Link>
+              <Link
+                href="/automation"
+                className="rounded-md border border-black/10 px-2 py-1 font-semibold uppercase tracking-wide hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+              >
+                Automation
+              </Link>
+              <Link
+                href="/workflows"
+                className="rounded-md border border-black/10 px-2 py-1 font-semibold uppercase tracking-wide hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+              >
+                Workflows
+              </Link>
+              <Link
+                href="/audit"
+                className="rounded-md border border-black/10 px-2 py-1 font-semibold uppercase tracking-wide hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+              >
+                Audit
+              </Link>
+            </div>
           </nav>
 
           {activeTab === "summary" ? <SummaryTab workflow={workflow} /> : null}
@@ -482,7 +753,8 @@ export function MissionControl({ flows }: { flows: FlowSummary[] }) {
         </>
       ) : (
         <section className="k-card text-sm text-slate-600 dark:text-slate-300">
-          Select a flow and press <span className="font-semibold">Run Selected Flow</span> to execute an end-to-end demo workflow.
+          Pick a live alert or demo flow above and press <span className="font-semibold">Run Workflow</span> to execute an
+          end-to-end agent run. The result powers the linked pages.
         </section>
       )}
     </section>
