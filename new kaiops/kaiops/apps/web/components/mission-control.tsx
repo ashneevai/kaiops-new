@@ -707,40 +707,16 @@ export function MissionControl({ flows }: { flows: FlowSummary[] }) {
             })}
             <div className="ml-auto flex flex-wrap items-center gap-2 text-xs">
               <Link
-                href="/incidents"
+                href="/alerts"
                 className="rounded-md border border-black/10 px-2 py-1 font-semibold uppercase tracking-wide hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
               >
-                Command Center
+                Alerts
               </Link>
               <Link
-                href="/investigation"
+                href="/knowledge"
                 className="rounded-md border border-black/10 px-2 py-1 font-semibold uppercase tracking-wide hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
               >
-                Investigation
-              </Link>
-              <Link
-                href="/rca"
-                className="rounded-md border border-black/10 px-2 py-1 font-semibold uppercase tracking-wide hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-              >
-                RCA
-              </Link>
-              <Link
-                href="/automation"
-                className="rounded-md border border-black/10 px-2 py-1 font-semibold uppercase tracking-wide hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-              >
-                Automation
-              </Link>
-              <Link
-                href="/workflows"
-                className="rounded-md border border-black/10 px-2 py-1 font-semibold uppercase tracking-wide hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-              >
-                Workflows
-              </Link>
-              <Link
-                href="/audit"
-                className="rounded-md border border-black/10 px-2 py-1 font-semibold uppercase tracking-wide hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
-              >
-                Audit
+                Knowledge
               </Link>
             </div>
           </nav>

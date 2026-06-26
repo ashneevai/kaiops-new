@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     embedding_provider: str = Field(default="openai")
     openai_api_key: str | None = None
     openai_embedding_model: str = Field(default="text-embedding-3-small")
+    openai_chat_model: str = Field(default="gpt-4o-mini")
+    openai_request_timeout_seconds: float = Field(default=30.0)
+    llm_temperature: float = Field(default=0.2)
     azure_openai_endpoint: str | None = None
     azure_openai_api_key: str | None = None
     azure_openai_embedding_deployment: str | None = None
