@@ -29,6 +29,13 @@ class AgentRuntimeService:
         result = incident_graph.invoke(initial_state)
 
         for agent_name in ["context", "rca", "impact", "resolution", "validation"]:
+            agent_output = dict(result[agent_name])
+            agent_output["llm_usage"] = self._estimate_llm_usage(
+                agent_name=agent_name,
+                input_payload=initial_state,
+                output_payload=agent_output,
+            )
+
             execution = models.AgentExecution(
                 tenant_id=incident.tenant_id,
                 incident_id=incident.id,
@@ -36,7 +43,7 @@ class AgentRuntimeService:
                 status="completed",
                 confidence_score=result[agent_name].get("confidence", result.get("confidence", 0)),
                 input_payload=initial_state,
-                output_payload=result[agent_name],
+                output_payload=agent_output,
             )
             self.db.add(execution)
 
@@ -45,3 +52,26 @@ class AgentRuntimeService:
         self.db.commit()
 
         return result
+
+    @staticmethod
+    def _estimate_llm_usage(agent_name: str, input_payload: dict, output_payload: dict) -> dict:
+        input_size = len(str(input_payload))
+        output_size = len(str(output_payload))
+
+        prompt_tokens = max(input_size // 4, 300)
+        completion_tokens = max(output_size // 4, 120)
+        total_tokens = prompt_tokens + completion_tokens
+
+        model = "gpt-4o-mini"
+        token_cost_per_1k_usd = 0.0008
+        estimated_cost_usd = round((total_tokens / 1000) * token_cost_per_1k_usd, 6)
+
+        return {
+            "agent_name": agent_name,
+            "model": model,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": total_tokens,
+            "token_cost_per_1k_usd": token_cost_per_1k_usd,
+            "estimated_cost_usd": estimated_cost_usd,
+        }

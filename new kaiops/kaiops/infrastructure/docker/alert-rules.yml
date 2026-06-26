@@ -1,0 +1,43 @@
+groups:
+  - name: kaiops-real-alerts
+    interval: 15s
+    rules:
+      - alert: KaiOpsApiTargetDown
+        expr: up{job="kaiops-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: kaiops-api
+        annotations:
+          summary: KaiOps API target is down
+          description: Prometheus cannot scrape the KaiOps API metrics endpoint for more than 1 minute.
+
+      - alert: KaiOpsApiScrapeSlow
+        expr: scrape_duration_seconds{job="kaiops-api"} > 0.01
+        for: 30s
+        labels:
+          severity: warning
+          service: kaiops-api
+        annotations:
+          summary: KaiOps API scrape duration is high
+          description: Prometheus scrape duration for KaiOps API is above 10ms for at least 30 seconds.
+
+      - alert: PrometheusSelfScrapeSlow
+        expr: scrape_duration_seconds{job="prometheus"} > 0.005
+        for: 30s
+        labels:
+          severity: warning
+          service: prometheus
+        annotations:
+          summary: Prometheus self-scrape duration is high
+          description: Prometheus self-scrape duration is above 5ms for at least 30 seconds.
+
+      - alert: MySQLExporterTargetDown
+        expr: up{job="mysql"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: mysql
+        annotations:
+          summary: MySQL exporter target is down
+          description: Prometheus cannot scrape mysql-exporter for more than 1 minute.

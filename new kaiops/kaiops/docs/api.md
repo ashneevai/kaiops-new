@@ -5,6 +5,7 @@
 
 ## Core Endpoints
 - POST /auth/token
+- GET /monitoring/overview
 - GET /alerts
 - POST /alerts/ingest
 - GET /incidents

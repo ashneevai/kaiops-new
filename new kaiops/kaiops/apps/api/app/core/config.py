@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     redis_url: str = Field(default="redis://localhost:6379/0")
     kafka_bootstrap_servers: str = Field(default="localhost:9092")
     kafka_required: bool = Field(default=False)
+    prometheus_base_url: str = Field(default="http://localhost:9090")
 
     jwt_secret_key: str = Field(default="change-me-in-production")
     jwt_algorithm: str = Field(default="HS256")
@@ -24,6 +25,9 @@ class Settings(BaseSettings):
     embedding_provider: str = Field(default="openai")
     openai_api_key: str | None = None
     openai_embedding_model: str = Field(default="text-embedding-3-small")
+    openai_chat_model: str = Field(default="gpt-4o-mini")
+    openai_request_timeout_seconds: float = Field(default=30.0)
+    llm_temperature: float = Field(default=0.2)
     azure_openai_endpoint: str | None = None
     azure_openai_api_key: str | None = None
     azure_openai_embedding_deployment: str | None = None
