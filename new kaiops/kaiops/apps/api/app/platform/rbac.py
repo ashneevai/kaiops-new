@@ -84,4 +84,4 @@ PERMISSION_RULES: dict[tuple[str, str], str] = {
     ("/api/v1/agents/incidents/", "POST"): "agents:execute",
 }
 
-EXEMPT_PATHS = {"/health", "/api/v1/auth/token"}
+EXEMPT_PATHS = {"/health", "/api/v1/auth/token", "/api/v1/monitoring/overview"}

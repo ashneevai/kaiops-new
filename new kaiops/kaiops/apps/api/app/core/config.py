@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     redis_url: str = Field(default="redis://localhost:6379/0")
     kafka_bootstrap_servers: str = Field(default="localhost:9092")
     kafka_required: bool = Field(default=False)
+    prometheus_base_url: str = Field(default="http://localhost:9090")
 
     jwt_secret_key: str = Field(default="change-me-in-production")
     jwt_algorithm: str = Field(default="HS256")

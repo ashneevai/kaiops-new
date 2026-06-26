@@ -2,6 +2,11 @@
 
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis } from "recharts";
 
+export type KPIItem = {
+  label: string;
+  value: string;
+};
+
 const data = [
   { name: "auth", incidents: 12 },
   { name: "checkout", incidents: 23 },
@@ -9,19 +14,19 @@ const data = [
   { name: "billing", incidents: 16 },
 ];
 
-export function KPIGrid() {
-  const kpis = [
-    ["Open Incidents", "42"],
-    ["Critical Incidents", "7"],
-    ["MTTR", "38m"],
-    ["Automation Success", "94.2%"],
-    ["AI Confidence", "81%"],
-    ["Top Services Impacted", "checkout, billing"],
-  ];
+const defaultKpis: KPIItem[] = [
+  { label: "Open Incidents", value: "42" },
+  { label: "Critical Incidents", value: "7" },
+  { label: "MTTR", value: "38m" },
+  { label: "Automation Success", value: "94.2%" },
+  { label: "AI Confidence", value: "81%" },
+  { label: "Top Services Impacted", value: "checkout, billing" },
+];
 
+export function KPIGrid({ items = defaultKpis }: { items?: KPIItem[] }) {
   return (
     <div className="grid gap-3 md:grid-cols-3">
-      {kpis.map(([label, value]) => (
+      {items.map(({ label, value }) => (
         <article key={label} className="k-card">
           <p className="text-xs uppercase tracking-wider text-slate-600 dark:text-slate-300">{label}</p>
           <h3 className="mt-2 text-xl font-semibold">{value}</h3>
