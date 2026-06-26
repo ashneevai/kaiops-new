@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 
 import {
-  NEXT_PUBLIC_API_BASE_URL,
   type FlowSummary,
   type WorkflowEvent,
   type WorkflowResponse,
@@ -347,7 +346,7 @@ export function MissionControl({ flows }: { flows: FlowSummary[] }) {
     setError(null);
 
     try {
-      const response = await fetch(`${NEXT_PUBLIC_API_BASE_URL}/api/v1/sample/${selectedFlowId}/workflow`, {
+      const response = await fetch(`/api/sample/${selectedFlowId}/workflow`, {
         method: "POST",
         cache: "no-store",
       });
