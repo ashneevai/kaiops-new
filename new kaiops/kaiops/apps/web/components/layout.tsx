@@ -7,6 +7,7 @@ import { useUIStore } from "@/lib/store/ui-store";
 
 const nav = [
   ["Dashboard", "/dashboard"],
+  ["Mission Control", "/mission-control"],
   ["Command Center", "/incidents"],
   ["Alerts", "/alerts"],
   ["Investigation", "/investigation"],

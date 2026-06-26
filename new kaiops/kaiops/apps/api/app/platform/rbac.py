@@ -8,16 +8,28 @@ from app.platform.auth import decode_jwt
 
 
 class RBACMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, permission_rules: dict[tuple[str, str], str], exempt_paths: set[str]):
+    def __init__(
+        self,
+        app,
+        permission_rules: dict[tuple[str, str], str],
+        exempt_paths: set[str],
+        exempt_path_prefixes: tuple[str, ...] = (),
+    ):
         super().__init__(app)
         self.permission_rules = permission_rules
         self.exempt_paths = exempt_paths
+        self.exempt_path_prefixes = exempt_path_prefixes
 
     async def dispatch(self, request: Request, call_next: Callable):
         path = request.url.path
         method = request.method.upper()
 
-        if path in self.exempt_paths or path.startswith("/docs") or path.startswith("/openapi"):
+        if (
+            path in self.exempt_paths
+            or path.startswith("/docs")
+            or path.startswith("/openapi")
+            or any(path.startswith(prefix) for prefix in self.exempt_path_prefixes)
+        ):
             return await call_next(request)
 
         if not path.startswith("/api/v1"):
@@ -84,4 +96,13 @@ PERMISSION_RULES: dict[tuple[str, str], str] = {
     ("/api/v1/agents/incidents/", "POST"): "agents:execute",
 }
 
-EXEMPT_PATHS = {"/health", "/api/v1/auth/token", "/api/v1/monitoring/overview", "/api/v1/monitoring/alerts", "/api/v1/monitoring/llmops"}
+EXEMPT_PATHS = {
+    "/health",
+    "/api/v1/auth/token",
+    "/api/v1/monitoring/overview",
+    "/api/v1/monitoring/alerts",
+    "/api/v1/monitoring/llmops",
+    "/api/v1/sample/flows",
+}
+
+EXEMPT_PATH_PREFIXES: tuple[str, ...] = ("/api/v1/sample/",)

@@ -10,6 +10,7 @@ from services.automation.api import router as automation_router
 from services.incidents.api import router as incidents_router
 from services.knowledge.api import router as knowledge_router
 from services.notifications.api import router as notifications_router
+from services.sample_flows.api import router as sample_flows_router
 from services.users.api import router as users_router
 from services.workflows.api import router as workflows_router
 
@@ -17,6 +18,7 @@ api_router = APIRouter()
 
 api_router.include_router(auth_router)
 api_router.include_router(monitoring_router)
+api_router.include_router(sample_flows_router)
 api_router.include_router(alerts_router)
 api_router.include_router(incidents_router)
 api_router.include_router(workflows_router)
